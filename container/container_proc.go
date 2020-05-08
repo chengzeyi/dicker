@@ -17,9 +17,12 @@ const (
 	DEFAULT_INFO_DIR_PATH   = "/var/run/dicker"
 	CONDIG_FILE_NAME        = "config.json"
 	CONTAINER_LOG_FILE_NAME = "container.log"
-	ROOT_DIR_PATH           = "/root"
-	MNT_DIR_PATH            = "/root/mnt"
-	WRITE_LAYER_DIR_PATH    = "/root/wirte_layer"
+	// ROOT_DIR_PATH           = "/root"
+	MNT_DIR_PATH            = "/root/.dicker/mnt"
+	IMAGE_DIR_PATH          = "/root/.dicker/image"
+	READONLY_LAYER_DIR_PATH = "/root/.dicker/readonly_layer"
+	WRITE_LAYER_DIR_PATH    = "/root/.dicker/wirte_layer"
+	OVERLAY_WORK_DIR_PATH   = "/root/.dicker/overlay_work"
 )
 
 type ContainerInfo struct {
