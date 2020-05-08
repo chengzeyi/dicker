@@ -1,10 +1,18 @@
-package main
+package command
 
 import (
 	"os"
 	"os/exec"
 	"syscall"
 )
+
+type RunOption struct {
+	Tty bool
+}
+
+func Run(option *RunOption, imageName string, cmdArr []string) error {
+	return nil
+}
 
 func NewParentProcess(tty bool, cmd string) *exec.Cmd {
 	args := []string{"init", cmd}
@@ -18,8 +26,4 @@ func NewParentProcess(tty bool, cmd string) *exec.Cmd {
 		command.Stderr = os.Stderr
 	}
 	return command
-}
-
-func Run(tty bool, cmd string) {
-	os.Exit(-1)
 }

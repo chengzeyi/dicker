@@ -8,8 +8,6 @@ import (
 	"strings"
 	"syscall"
 
-	// "syscall"
-
 	log "github.com/sirupsen/logrus"
 )
 
@@ -20,7 +18,9 @@ func NewWorkspace(volumeMapping, imageName, containerName string) error {
 	if err := createWriteLayer(containerName); err != nil {
 		return fmt.Errorf("CreateWriteLayer %s error %v", containerName, err)
 	}
-	// CreateMountPoint(containerName, imageName)
+	if err := createMountPoint(containerName, imageName); err != nil {
+		return fmt.Errorf("CreateMountPoint %s with %s error %v", containerName, imageName, err)
+	}
 	parentVolume, containerVolume, err := parseVolumeMapping(volumeMapping)
 	if err != nil {
 		log.Errorf("parseVolumeMapping %s error %v", volumeMapping, err)
@@ -144,7 +144,9 @@ func DeleteWorkspace(volumeMapping, containerName string) error {
 	if err := deleteMountPoint(containerName); err != nil {
 		return fmt.Errorf("deleteMountPoint %s error %v", containerName, err)
 	}
-	// deleteWriteLayer(containerName)
+	if err := deleteWriteLayer(containerName); err != nil {
+		return fmt.Errorf("deleteWriteLayer %s error %v", containerName, err)
+	}
 
 	return nil
 }

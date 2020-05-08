@@ -33,7 +33,7 @@ type ContainerInfo struct {
 	CreateTime  string   `json:"create_time"`  // Container created time.
 	Status      string   `json:"status"`       // Container status description.
 	Volume      string   `json:"volume"`       // Container data volume.
-	PortMappint []string `json:"port_mapping"` // Container port mapping.
+	PortMapping []string `json:"port_mapping"` // Container port mapping.
 }
 
 func NewParentProcess(tty bool, containerName, volume, imageName string, envs []string) (*exec.Cmd, *os.File, error) {
