@@ -6,8 +6,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"syscall"
-
-	"github.com/chengzeyi/dicker/command"
 )
 
 const (
@@ -23,6 +21,10 @@ const (
 	READONLY_LAYER_DIR_PATH = "/root/.dicker/readonly_layer"
 	WRITE_LAYER_DIR_PATH    = "/root/.dicker/wirte_layer"
 	OVERLAY_WORK_DIR_PATH   = "/root/.dicker/overlay_work"
+
+	// This is a redefine outside package 'command',
+	// since Go does not support import cycle.
+	COMMAND_INIT            = "init"
 )
 
 type ContainerInfo struct {
@@ -36,7 +38,7 @@ type ContainerInfo struct {
 	PortMapping []string `json:"port_mapping"` // Container port mapping.
 }
 
-func NewParentProcess(tty bool, containerName, volume, imageName string, envs []string) (*exec.Cmd, *os.File, error) {
+func NewParentProcess(tty bool, volumeMapping, imageName, containerName string, envs []string) (*exec.Cmd, *os.File, error) {
 	rPipe, wPipe, err := os.Pipe()
 	if err != nil {
 		return nil, nil, fmt.Errorf("Pipe error %v", err)
@@ -45,8 +47,12 @@ func NewParentProcess(tty bool, containerName, volume, imageName string, envs []
 	if err != nil {
 		return nil, nil, fmt.Errorf("Readlink /proc/self/exe error %v", err)
 	}
+	
+	if err := newWorkspace(volumeMapping, imageName, containerName); err != nil {
+		return nil, nil, fmt.Errorf("NewWorkspace with volume mapping %s, image name %s and containerName %s error %v", volumeMapping, imageName, containerName, err)
+	}
 
-	initCmd := exec.Command(selfCmd, command.COMMAND_INIT)
+	initCmd := exec.Command(selfCmd, COMMAND_INIT)
 	// Cloneflags contains all the namespace flags except CLONE_NEWUSER
 	// CLONE_NEWUTS: In the new UTS namespace.
 	// CLONE_NEWPID: In the new pid namespace.
@@ -79,8 +85,6 @@ func NewParentProcess(tty bool, containerName, volume, imageName string, envs []
 	}
 	initCmd.Env = append(os.Environ(), envs...)
 	initCmd.Dir = filepath.Join(MNT_DIR_PATH, containerName)
-
-	// TODO: NewWorkspace
 
 	return initCmd, wPipe, nil
 }

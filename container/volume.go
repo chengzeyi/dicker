@@ -11,7 +11,7 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-func NewWorkspace(volumeMapping, imageName, containerName string) error {
+func newWorkspace(volumeMapping, imageName, containerName string) error {
 	if err := createReadOnlyLayer(imageName); err != nil {
 		return fmt.Errorf("CreateReadOnlyLayer %s error %v", imageName, err)
 	}
@@ -137,12 +137,12 @@ func DeleteWorkspace(volumeMapping, containerName string) error {
 		// the unmounting operation of the container mount point will fail.
 	} else if len(parentVolume) != 0 && len(containerVolume) != 0 {
 		if err := deleteVolume(containerVolume, containerName); err != nil {
-			return fmt.Errorf("deleteVolume %s from %s error %v", containerVolume, containerName, err)
+			return fmt.Errorf("deleteVolume %s from %s error %v. Mount point and write layer won't be deleted", containerVolume, containerName, err)
 		}
 	}
 	
 	if err := deleteMountPoint(containerName); err != nil {
-		return fmt.Errorf("deleteMountPoint %s error %v", containerName, err)
+		return fmt.Errorf("deleteMountPoint %s error %v, Write layer won't be deleted", containerName, err)
 	}
 	if err := deleteWriteLayer(containerName); err != nil {
 		return fmt.Errorf("deleteWriteLayer %s error %v", containerName, err)
