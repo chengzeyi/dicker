@@ -13,21 +13,21 @@ import (
 
 func NewWorkspace(volumeMapping , imageName, containerName string) error {
 	if err := createReadOnlyLayer(imageName); err != nil {
-		return fmt.Errorf("CreateReadOnlyLayer %s error %v", imageName, err)
+		return fmt.Errorf("createReadOnlyLayer() %s error %v", imageName, err)
 	}
 	if err := createWriteLayer(containerName); err != nil {
-		return fmt.Errorf("CreateWriteLayer %s error %v", containerName, err)
+		return fmt.Errorf("createWriteLayer() %s error %v", containerName, err)
 	}
 	if err := createMountPoint(containerName, imageName); err != nil {
-		return fmt.Errorf("CreateMountPoint %s with %s error %v", containerName, imageName, err)
+		return fmt.Errorf("createMountPoint() %s with %s error %v", containerName, imageName, err)
 	}
 
 	parentVolume, containerVolume, err := parseVolumeMapping(volumeMapping)
 	if err != nil {
-		log.Errorf("parseVolumeMapping %s error %v", volumeMapping, err)
+		log.Errorf("parseVolumeMapping() %s error %v", volumeMapping, err)
 	} else if len(parentVolume) != 0 && len(containerVolume) != 0 {
 		if err := mountVolume(parentVolume, containerVolume, containerName); err != nil {
-			log.Errorf("MountVolume %s to %s error %v", parentVolume, containerVolume, containerName)
+			log.Errorf("mountVolume() %s to %s error %v", parentVolume, containerVolume, containerName)
 		}
 	}
 
@@ -49,15 +49,15 @@ func parseVolumeMapping(volumeMapping string) (string, string, error) {
 func createReadOnlyLayer(imageName string) error {
 	imagePath := filepath.Join(IMAGE_DIR_PATH, imageName+".tar")
 	if _, err := os.Stat(imagePath); err != nil {
-		return fmt.Errorf("Stat %s error %v", imagePath, err)	}
+		return fmt.Errorf("Stat() %s error %v", imagePath, err)	}
 
 	untarFoldPath := filepath.Join(READONLY_LAYER_DIR_PATH, imageName)
 	if _, err := os.Stat(untarFoldPath); err != nil {
 		if os.IsNotExist(err) {
 			// The directory needs creating.
-			log.Infof("Create untarFoldPath %s", untarFoldPath)
+			log.Infof("Directory %s needs creating", untarFoldPath)
 			if err := os.MkdirAll(untarFoldPath, 0622); err != nil {
-				return fmt.Errorf("MkdirAll %s error %v", untarFoldPath, err)
+				return fmt.Errorf("MkdirAll() %s error %v", untarFoldPath, err)
 			}
 			// After creating the directory, untar the image.
 			if _, err := exec.Command("tar", "-xvf", imagePath, "-C", untarFoldPath).CombinedOutput(); err != nil {
@@ -76,7 +76,7 @@ func createReadOnlyLayer(imageName string) error {
 func createWriteLayer(containerName string) error {
 	writePath := filepath.Join(WRITE_LAYER_DIR_PATH, containerName)
 	if err := os.MkdirAll(writePath, 0777); err != nil {
-		return fmt.Errorf("MkdirAll %s error %v", writePath, err)
+		return fmt.Errorf("MkdirAll() %s error %v", writePath, err)
 	}
 
 	return nil
@@ -85,13 +85,13 @@ func createWriteLayer(containerName string) error {
 func createMountPoint(containerName, imageName string) error {
 	mntPath := filepath.Join(MNT_DIR_PATH, containerName)
 	if err := os.MkdirAll(mntPath, 0777); err != nil {
-		return fmt.Errorf("MkdirAll %s error %v", mntPath, err)
+		return fmt.Errorf("MkdirAll() %s error %v", mntPath, err)
 	}
 
 	workDirPath := filepath.Join(OVERLAY_WORK_DIR_PATH, containerName)
 	// The Overlay work directory needs to be empty!
 	if err := os.MkdirAll(workDirPath, 0777); err != nil {
-		return fmt.Errorf("MkdirAll %s error %v", workDirPath, err)
+		return fmt.Errorf("MkdirAll() %s error %v", workDirPath, err)
 	}
 
 	writeLayerPath := filepath.Join(WRITE_LAYER_DIR_PATH, containerName)
@@ -100,7 +100,7 @@ func createMountPoint(containerName, imageName string) error {
 	options := fmt.Sprintf("upperdir=%s,lowerdir=%s,workdir=%s", writeLayerPath, readOnlyLayerPath, workDirPath)
 
 	if err := syscall.Mount(mntPath, mntPath, "overlay", 0, options); err != nil {
-		return fmt.Errorf("Mount overlay filesystem to %s error %v", mntPath, err)
+		return fmt.Errorf("Mount() overlay filesystem to %s with options %s error %v", mntPath, options, err)
 	}
 
 	return nil
@@ -110,7 +110,7 @@ func createMountPoint(containerName, imageName string) error {
 func mountVolume(parentVolume, containerVolume, containerName string) error {
 	// Create the host directory.
 	if err := os.MkdirAll(parentVolume, 0777); err != nil {
-		return fmt.Errorf("Mkdir %s error %v", parentVolume, err)
+		return fmt.Errorf("Mkdir() %s error %v", parentVolume, err)
 	}
 
 	mntPath := filepath.Join(MNT_DIR_PATH, containerName)
@@ -118,12 +118,12 @@ func mountVolume(parentVolume, containerVolume, containerName string) error {
 	// It is in the container filesystem.
 	containerVolumePath := filepath.Join(mntPath, containerVolume)
 	if err := os.MkdirAll(containerVolumePath, 0777); err != nil {
-		return fmt.Errorf("Mkdir %s error %v", containerVolumePath, err)
+		return fmt.Errorf("Mkdir() %s error %v", containerVolumePath, err)
 	}
 
 	// Bind parentVolume to containerVolumePath.
 	if err := syscall.Mount(parentVolume, containerVolumePath, "", syscall.MS_BIND | syscall.MS_REC, ""); err != nil {
-		return fmt.Errorf("Mount %s to %s error %v", parentVolume, containerVolumePath, err)
+		return fmt.Errorf("Mount() %s to %s error %v", parentVolume, containerVolumePath, err)
 	}
 	return nil
 }
@@ -135,22 +135,22 @@ func DeleteWorkspace(volumeMapping, containerName string) error {
 	var retErr error
 	parentVolume, containerVolume, err := parseVolumeMapping(volumeMapping)
 	if err != nil {
-		log.Errorf("parseVolumeMapping %s error %v", volumeMapping, err)
+		log.Errorf("parseVolumeMapping() %s error %v", volumeMapping, err)
 		// Just continue. But if there is really a volume mounted,
 		// the unmounting operation of the container mount point will fail.
 	} else if len(parentVolume) != 0 && len(containerVolume) != 0 {
 		if err := deleteVolume(containerVolume, containerName); err != nil {
-			retErr = fmt.Errorf("deleteVolume %s from %s error %v.", containerVolume, containerName, err)
+			retErr = fmt.Errorf("deleteVolume() %s from %s error %v.", containerVolume, containerName, err)
 			log.Error(retErr.Error())
 		}
 	}
 	
 	if err := deleteMountPoint(containerName); err != nil {
-		retErr = fmt.Errorf("deleteMountPoint %s error %v", containerName, err)
+		retErr = fmt.Errorf("deleteMountPoint() %s error %v", containerName, err)
 		log.Error(retErr.Error())
 	}
 	if err := deleteWriteLayer(containerName); err != nil {
-		retErr = fmt.Errorf("deleteWriteLayer %s error %v", containerName, err)
+		retErr = fmt.Errorf("deleteWriteLayer() %s error %v", containerName, err)
 		log.Error(retErr.Error())
 	}
 
@@ -164,7 +164,7 @@ func deleteVolume(containerVolume, containerName string) error {
 	mntPath := filepath.Join(MNT_DIR_PATH, containerName)
 	containerVolumePath := filepath.Join(mntPath, containerVolume)
 	if err := syscall.Unmount(containerVolumePath, 0); err != nil {
-		return fmt.Errorf("Unmount %s error %v", containerVolumePath, err)
+		return fmt.Errorf("Unmount() %s error %v", containerVolumePath, err)
 	}
 
 	return nil
@@ -173,10 +173,16 @@ func deleteVolume(containerVolume, containerName string) error {
 func deleteMountPoint(containerName string) error {
 	mntPath := filepath.Join(MNT_DIR_PATH, containerName)
 	if err := syscall.Unmount(mntPath, 0); err != nil {
-		return fmt.Errorf("Unmount %s error %v", mntPath, err)
+		return fmt.Errorf("Unmount() %s error %v", mntPath, err)
 	}
 	if err := os.RemoveAll(mntPath); err != nil {
-		return fmt.Errorf("RemoveAll %s error %v", mntPath, err)
+		return fmt.Errorf("RemoveAll() %s error %v", mntPath, err)
+	}
+
+	workDirPath := filepath.Join(OVERLAY_WORK_DIR_PATH, containerName)
+	// The Overlay work directory needs to be empty!
+	if err := os.RemoveAll(workDirPath); err != nil {
+		return fmt.Errorf("RemoveAll() %s error %v", workDirPath, err)
 	}
 
 	return nil
@@ -185,7 +191,7 @@ func deleteMountPoint(containerName string) error {
 func deleteWriteLayer(containerName string) error {
 	writeLayerPath := filepath.Join(WRITE_LAYER_DIR_PATH, containerName)
 	if err := os.RemoveAll(writeLayerPath); err != nil {
-		return fmt.Errorf("RemoveAll %s error %v", writeLayerPath, err)
+		return fmt.Errorf("RemoveAll() %s error %v", writeLayerPath, err)
 	}
 
 	return nil
