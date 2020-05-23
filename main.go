@@ -1,8 +1,8 @@
 package main
 
 import (
-	"os"
 	"github.com/chengzeyi/dicker/command"
+	"os"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -12,7 +12,7 @@ const usage = "Dicker is a simple container runtime implementation. Use it just 
 func main() {
 	args := os.Args
 	if len(args) <= 1 {
-		log.Errorf("Missing Dicker command, use help command to see the full command list and usage")
+		log.Errorf("Missing Dicker command, use %s command to see the full command list and usage", command.COMMAND_HELP)
 		os.Exit(1)
 	}
 

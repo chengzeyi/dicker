@@ -9,11 +9,12 @@ import (
 )
 
 const (
-	RUNNING                 = "runing"
-	STOPPED                 = "stopped"
-	EXITED                  = "exited"
+	STATUS_RUNNING          = "runing"
+	STATUS_STOPPED          = "stopped"
+	STATUS_EXITED           = "exited"
+
 	DEFAULT_INFO_DIR_PATH   = "/var/run/dicker"
-	CONDIG_FILE_NAME        = "config.json"
+	CONFIG_FILE_NAME        = "config.json"
 	CONTAINER_LOG_FILE_NAME = "container.log"
 	// ROOT_DIR_PATH           = "/root"
 	MNT_DIR_PATH            = "/root/.dicker/mnt"
@@ -28,28 +29,28 @@ const (
 )
 
 type ContainerInfo struct {
-	Pid         string   `json:"pid"`          // Container init process's pid on the host OS.
-	Id          string   `json:"id"`           // Container id.
-	Name        string   `json:"name"`         // Container name.
-	Command     string   `json:"command"`      // Container init command.
-	CreateTime  string   `json:"create_time"`  // Container created time.
-	Status      string   `json:"status"`       // Container status description.
-	Volume      string   `json:"volume"`       // Container data volume.
-	PortMapping []string `json:"port_mapping"` // Container port mapping.
+	Pid           int   `json:"pid"`          // Container init process's pid on the host OS.
+	Id            string   `json:"id"`           // Container id.
+	Name          string   `json:"name"`         // Container name.
+	Command       string   `json:"command"`      // Container init command.
+	CreateTime    string   `json:"create_time"`  // Container created time.
+	Status        string   `json:"status"`       // Container status description.
+	VolumeMapping string   `json:"volume_mapping"`       // Container data volume mapping.
+	PortMappings  []string `json:"port_mappings"` // Container port mapping.
 }
 
 func NewParentProcess(tty bool, volumeMapping, imageName, containerName string, envs []string) (*exec.Cmd, *os.File, error) {
 	rPipe, wPipe, err := os.Pipe()
 	if err != nil {
-		return nil, nil, fmt.Errorf("Pipe error %v", err)
+		return nil, nil, fmt.Errorf("Pipe() error %v", err)
 	}
 	selfCmd, err := os.Readlink("/proc/self/exe")
 	if err != nil {
-		return nil, nil, fmt.Errorf("Readlink /proc/self/exe error %v", err)
+		return nil, nil, fmt.Errorf("Readlink() /proc/self/exe error %v", err)
 	}
 	
-	if err := newWorkspace(volumeMapping, imageName, containerName); err != nil {
-		return nil, nil, fmt.Errorf("NewWorkspace with volume mapping %s, image name %s and containerName %s error %v", volumeMapping, imageName, containerName, err)
+	if err := NewWorkspace(volumeMapping, imageName, containerName); err != nil {
+		return nil, nil, fmt.Errorf("NewWorkspace() with volume mapping %s, image name %s and containerName %s error %v", volumeMapping, imageName, containerName, err)
 	}
 
 	initCmd := exec.Command(selfCmd, COMMAND_INIT)
@@ -70,12 +71,12 @@ func NewParentProcess(tty bool, volumeMapping, imageName, containerName string, 
 	} else {
 		dirPath := filepath.Join(DEFAULT_INFO_DIR_PATH, containerName)
 		if err := os.MkdirAll(dirPath, 0622); err != nil {
-			return nil, nil, fmt.Errorf("MkdirAll %s error %v", dirPath, err)
+			return nil, nil, fmt.Errorf("MkdirAll() %s error %v", dirPath, err)
 		}
 		stdOutLogFilePath := filepath.Join(dirPath, CONTAINER_LOG_FILE_NAME)
 		stdOutLogFile, err := os.Create(stdOutLogFilePath)
 		if err != nil {
-			return nil, nil, fmt.Errorf("Create %s error %v", stdOutLogFilePath, err)
+			return nil, nil, fmt.Errorf("Create() %s error %v", stdOutLogFilePath, err)
 		}
 		initCmd.Stdout = stdOutLogFile
 	}
@@ -83,6 +84,7 @@ func NewParentProcess(tty bool, volumeMapping, imageName, containerName string, 
 	initCmd.ExtraFiles = []*os.File{
 		rPipe,
 	}
+	// If Env is specified, the original environment variables will be overridden.
 	initCmd.Env = append(os.Environ(), envs...)
 	initCmd.Dir = filepath.Join(MNT_DIR_PATH, containerName)
 

@@ -59,19 +59,19 @@ func mount() error {
 
 	// After this, the working directory becomes '/'.
 	if err := pivotRoot(wd); err != nil {
-		return fmt.Errorf("pivotRoot %s error %v", wd, err)
+		return fmt.Errorf("pivotRoot() %s error %v", wd, err)
 	}
 
 	//_MS_NOEXEC: Do not allow program to be executed from this filesystem.
 	// MS_NO_SUID: Do not honor set-user-ID and set-group-ID bits or file capabilities when executing programs from this filesystem.
 	// MS_NODEV: Do not allow access to devices (special files) on this filesystem.
 	if err := syscall.Mount("proc", "/proc", "proc", syscall.MS_NOEXEC | syscall.MS_NOSUID | syscall.MS_NODEV, ""); err != nil {
-		return fmt.Errorf("Mount proc to /proc error %v", err)
+		return fmt.Errorf("Mount() proc to /proc error %v", err)
 	}
 	// MS_STRICTATIME: Always update the last access time (atime) when files on this filesystem are accessed.
 	// MS_RELATIME: Only update atime if it is less than or equal to mtime or ctime. (default behaviour since Linux 2.6.20)
 	if err := syscall.Mount("tmpfs", "/dev", "tmpfs", syscall.MS_NOSUID | syscall.MS_STRICTATIME, "mode=755"); err != nil {
-		return fmt.Errorf("Mount tmpfs to /dev error %v", err)
+		return fmt.Errorf("Mount() tmpfs to /dev error %v", err)
 	}
 
 	return nil
@@ -84,29 +84,29 @@ func pivotRoot(root string) error {
 	// fstype and data are also ignored.
 	// This creates a security boundary for certain operations like hard link.
 	if err := syscall.Mount(root, root, "", syscall.MS_BIND | syscall.MS_REC, ""); err != nil {
-		return fmt.Errorf("Mount %s to itself error %v", root, err)
+		return fmt.Errorf("Mount() %s to itself error %v", root, err)
 	}
 	// .pivot_root is used for storing the old root.
 	putold := filepath.Join(root, PIVOT_PUT_OLD_DIR_NAME)
 	// It should not exist before.
 	if err := os.Mkdir(putold, 0777); err != nil {
-		return fmt.Errorf("Mkdir %s error %v", PIVOT_PUT_OLD_DIR_NAME, err)
+		return fmt.Errorf("Mkdir() %s error %v", PIVOT_PUT_OLD_DIR_NAME, err)
 	}
 	// Make root to be / and put the old root in .pivot_root.
 	if err := syscall.PivotRoot(root, putold); err != nil {
-		return fmt.Errorf("PivotRoot error %v", err)
+		return fmt.Errorf("PivotRoot() error %v", err)
 	}
 	if err := syscall.Chdir("/"); err != nil {
-		return fmt.Errorf("Chdir / error %v", err)
+		return fmt.Errorf("Chdir() / error %v", err)
 	}
 	putold = filepath.Join("/", PIVOT_PUT_OLD_DIR_NAME)
 	// Unmount the old '/'.
 	if err := syscall.Unmount(putold, syscall.MNT_DETACH); err != nil {
-		return fmt.Errorf("Unmount directory %s error %v", PIVOT_PUT_OLD_DIR_NAME, err)
+		return fmt.Errorf("Unmount() directory %s error %v", PIVOT_PUT_OLD_DIR_NAME, err)
 	}
 	// Remove the tmp file.
 	if err := os.Remove(putold); err != nil {
-		return fmt.Errorf("Remove directory %s error %v", PIVOT_PUT_OLD_DIR_NAME, err)
+		return fmt.Errorf("Remove() directory %s error %v", PIVOT_PUT_OLD_DIR_NAME, err)
 	}
 
 	return nil

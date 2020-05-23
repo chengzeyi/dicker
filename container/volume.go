@@ -11,7 +11,7 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-func newWorkspace(volumeMapping, imageName, containerName string) error {
+func NewWorkspace(volumeMapping , imageName, containerName string) error {
 	if err := createReadOnlyLayer(imageName); err != nil {
 		return fmt.Errorf("CreateReadOnlyLayer %s error %v", imageName, err)
 	}
@@ -21,6 +21,7 @@ func newWorkspace(volumeMapping, imageName, containerName string) error {
 	if err := createMountPoint(containerName, imageName); err != nil {
 		return fmt.Errorf("CreateMountPoint %s with %s error %v", containerName, imageName, err)
 	}
+
 	parentVolume, containerVolume, err := parseVolumeMapping(volumeMapping)
 	if err != nil {
 		log.Errorf("parseVolumeMapping %s error %v", volumeMapping, err)
@@ -48,8 +49,7 @@ func parseVolumeMapping(volumeMapping string) (string, string, error) {
 func createReadOnlyLayer(imageName string) error {
 	imagePath := filepath.Join(IMAGE_DIR_PATH, imageName+".tar")
 	if _, err := os.Stat(imagePath); err != nil {
-		return fmt.Errorf("Stat %s error %v", imagePath, err)
-	}
+		return fmt.Errorf("Stat %s error %v", imagePath, err)	}
 
 	untarFoldPath := filepath.Join(READONLY_LAYER_DIR_PATH, imageName)
 	if _, err := os.Stat(untarFoldPath); err != nil {
@@ -129,7 +129,10 @@ func mountVolume(parentVolume, containerVolume, containerName string) error {
 }
 
 // Delete containerVolume, container mount point and additional layers.
+// Return non-nil if any practical deletion operation fails
+// and the return value is the last occurred error.
 func DeleteWorkspace(volumeMapping, containerName string) error {
+	var retErr error
 	parentVolume, containerVolume, err := parseVolumeMapping(volumeMapping)
 	if err != nil {
 		log.Errorf("parseVolumeMapping %s error %v", volumeMapping, err)
@@ -137,18 +140,21 @@ func DeleteWorkspace(volumeMapping, containerName string) error {
 		// the unmounting operation of the container mount point will fail.
 	} else if len(parentVolume) != 0 && len(containerVolume) != 0 {
 		if err := deleteVolume(containerVolume, containerName); err != nil {
-			return fmt.Errorf("deleteVolume %s from %s error %v. Mount point and write layer won't be deleted", containerVolume, containerName, err)
+			retErr = fmt.Errorf("deleteVolume %s from %s error %v.", containerVolume, containerName, err)
+			log.Error(retErr.Error())
 		}
 	}
 	
 	if err := deleteMountPoint(containerName); err != nil {
-		return fmt.Errorf("deleteMountPoint %s error %v, Write layer won't be deleted", containerName, err)
+		retErr = fmt.Errorf("deleteMountPoint %s error %v", containerName, err)
+		log.Error(retErr.Error())
 	}
 	if err := deleteWriteLayer(containerName); err != nil {
-		return fmt.Errorf("deleteWriteLayer %s error %v", containerName, err)
+		retErr = fmt.Errorf("deleteWriteLayer %s error %v", containerName, err)
+		log.Error(retErr.Error())
 	}
 
-	return nil
+	return retErr
 }
 
 // Delete containerVolume from containerName.
