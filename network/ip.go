@@ -20,9 +20,9 @@ type IpAddrManager struct {
 }
 
 func (ipam *IpAddrManager) Alloc(subnet *net.IPNet) (net.IP, error) {
-	ip := subnet.IP.To4()
-	if ip == nil {
-		return nil, fmt.Errorf("Unable to handle non-IPV4 subnet address of %s", subnet.IP)
+	subnetNumber := subnet.IP.To4()
+	if subnetNumber == nil {
+		return nil, fmt.Errorf("Unable to handle non-IPV4 subnet of %v", subnet)
 	}
 
 	ipam.Subnets = map[string][]bool{}
@@ -44,9 +44,7 @@ func (ipam *IpAddrManager) Alloc(subnet *net.IPNet) (net.IP, error) {
 	}
 
 	defer func() {
-		if err := ipam.dump(); err != nil {
-			log.Warnf("dump() error %v", err)
-		}
+		go ipam.dump()
 	}()
 
 	for i, c := range ipam.Subnets[subnet.String()] {
@@ -57,9 +55,9 @@ func (ipam *IpAddrManager) Alloc(subnet *net.IPNet) (net.IP, error) {
 
 			// Perfectly clone a shallow copy of the original byte slice.
 			// https://github.com/go101/go101/wiki/How-to-perfectly-clone-a-slice
-			ip = append(ip[:0:0], ip...)
+			ip := append(subnetNumber[:0:0], subnetNumber...).Mask(subnet.Mask)
 			for j := 0; j < 4; j++ {
-				ip[j] += byte(i >> uint((3-j)*8))
+				ip[j] += byte(i >> uint(3-j) * 8)
 			}
 
 			return ip, nil
@@ -70,6 +68,38 @@ func (ipam *IpAddrManager) Alloc(subnet *net.IPNet) (net.IP, error) {
 }
 
 func (ipam *IpAddrManager) Release(subnet *net.IPNet, ip net.IP) error {
+	ipam.Subnets = map[string][]bool{}
+
+	if err := ipam.load(); err != nil {
+		return fmt.Errorf("load() error %v", err)
+	}
+
+	subnetNumber := subnet.IP.To4()
+	if subnetNumber == nil {
+		return fmt.Errorf("Unable to handle non-IPV4 subnet address of %s", subnet.IP)
+	}
+
+	ipToRelease := ip.To4()
+	if ipToRelease == nil {
+		return fmt.Errorf("Unable to handle non-IPV4 subnet address of %s", ip)
+	}
+
+	// Perfectly clone a shallow copy of the original byte slice.
+	// https://github.com/go101/go101/wiki/How-to-perfectly-clone-a-slice
+	subnetIp := subnetNumber.Mask(subnet.Mask)
+	idx := 0
+	for i := 0; i < 4; i++ {
+		idx += int(ipToRelease[i]-subnetIp[i]) << uint((3-i)*8)
+	}
+	if idx == 0 || idx >= len(ipam.Subnets[subnet.String()])-1 {
+		return fmt.Errorf("Invalid allocated IP address %v of subnet %v", ipToRelease, subnet)
+	}
+
+	ipam.Subnets[subnet.String()][idx] = false
+	defer func() {
+		go ipam.dump()
+	}()
+
 	return nil
 }
 
@@ -101,32 +131,30 @@ func (ipam *IpAddrManager) load() error {
 	return nil
 }
 
-func (ipam *IpAddrManager) dump() error {
+func (ipam *IpAddrManager) dump() {
 	configFileDir, _ := filepath.Split(ipam.SubnetAllocatorPath)
 	if _, err := os.Stat(configFileDir); err != nil {
 		if os.IsNotExist(err) {
 			if err := os.MkdirAll(configFileDir, 0644); err != nil {
-				return fmt.Errorf("MkdirAll() %s error %v", configFileDir, err)
+				log.Errorf("MkdirAll() %s error %v", configFileDir, err)
 			}
 		} else {
-			return fmt.Errorf("Stat() %s error %v", configFileDir, err)
+			log.Errorf("Stat() %s error %v", configFileDir, err)
 		}
 	}
 
 	configJsonBytes, err := json.Marshal(ipam.Subnets)
 	if err != nil {
-		return fmt.Errorf("Marshal() error %v", err)
+		log.Errorf("Marshal() error %v", err)
 	}
 
 	configFile, err := os.OpenFile(ipam.SubnetAllocatorPath, os.O_TRUNC|os.O_WRONLY|os.O_CREATE, 0644)
 	defer configFile.Close()
 	if err != nil {
-		return fmt.Errorf("OpenFile() %s error %v", ipam.SubnetAllocatorPath, err)
+		log.Errorf("OpenFile() %s error %v", ipam.SubnetAllocatorPath, err)
 	}
 
 	if _, err := configFile.Write(configJsonBytes); err != nil {
-		return fmt.Errorf("Write() to file %s error %v", ipam.SubnetAllocatorPath, err)
+		log.Errorf("Write() to file %s error %v", ipam.SubnetAllocatorPath, err)
 	}
-
-	return nil
 }
