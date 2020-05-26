@@ -13,7 +13,7 @@ const (
 	STATUS_STOPPED          = "stopped"
 	STATUS_EXITED           = "exited"
 
-	DEFAULT_INFO_DIR_PATH   = "/var/run/dicker"
+	DEFAULT_INFO_DIR_PATH   = "/var/run/dicker/info"
 	CONFIG_FILE_NAME        = "config.json"
 	CONTAINER_LOG_FILE_NAME = "container.log"
 	// ROOT_DIR_PATH           = "/root"

@@ -29,7 +29,7 @@ type Subsystem interface {
 	Remove(path string) error
 }
 
-type SubsystemBase struct {}
+type SubsystemBase struct{}
 
 type CpuSubsystem struct {
 	SubsystemBase
@@ -56,7 +56,7 @@ func (s *SubsystemBase) set(path, key, val string) error {
 	if err != nil {
 		return fmt.Errorf("GetCgroupPath() error %v", err)
 	}
-	
+
 	filePath := filepath.Join(cgroupPath, key)
 	if err := ioutil.WriteFile(filePath, []byte(val), 0644); err != nil {
 		return fmt.Errorf("WriteFile() %s error %v", filePath, err)
@@ -91,7 +91,7 @@ func (s *SubsystemBase) Remove(path string) error {
 	return nil
 }
 
-func (s *CpuSubsystem) Name() string { 
+func (s *CpuSubsystem) Name() string {
 	return "cpu"
 }
 
@@ -99,7 +99,7 @@ func (s *CpuSubsystem) Set(path string, res *ResourceConfig) error {
 	return s.set(path, "cpu.shares", res.CpuShares)
 }
 
-func (s *CpusetSubsystem) Name() string { 
+func (s *CpusetSubsystem) Name() string {
 	return "cpuset"
 }
 
@@ -107,7 +107,7 @@ func (s *CpusetSubsystem) Set(path string, res *ResourceConfig) error {
 	return s.set(path, "cpuset.cpus", res.Cpuset)
 }
 
-func (s *MemorySubsystem) Name() string { 
+func (s *MemorySubsystem) Name() string {
 	return "memory"
 }
 

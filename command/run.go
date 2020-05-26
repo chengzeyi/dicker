@@ -15,16 +15,18 @@ import (
 )
 
 type RunOption struct {
-	Tty bool
+	Tty           bool
 	ContainerName string
 	VolumeMapping string
-	Envs []string
+	PortMappings  []string
+	Envs          []string
 }
 
 func Run(option *RunOption, imageName string, cmdArr []string) error {
 	containerName := option.ContainerName
 	tty := option.Tty
 	volumeMapping := option.VolumeMapping
+	portMappings := option.PortMappings
 	envs := option.Envs
 
 	containerId := util.GenRandStrBytes(10)
@@ -43,7 +45,7 @@ func Run(option *RunOption, imageName string, cmdArr []string) error {
 	// Parent process in the container should wait here to read piped command.
 
 	// TODO: recordContainerInfo
-	if err := writeContainerInfo(parent.Process.Pid, cmdArr, containerName, containerId, volumeMapping); err != nil {
+	if err := writeContainerInfo(parent.Process.Pid, cmdArr, portMappings, containerName, containerId, volumeMapping); err != nil {
 		return fmt.Errorf("recordContainerInfo() error %v", err)
 	}
 	// TODO: NewCgroupManager
@@ -84,7 +86,7 @@ func sendInitCommand(cmdArr []string, wPipe *os.File) error {
 	return nil
 }
 
-func writeContainerInfo(containerPid int, cmdArr []string, name, id, volumeMapping string) error {
+func writeContainerInfo(containerPid int, cmdArr, portMappings []string, name, id, volumeMapping string) error {
 	createTime := time.Now().Format("2006-01-02 15:04:05")
 	command := strings.Join(cmdArr, " ")
 	containerInfo := &container.ContainerInfo{
@@ -95,7 +97,7 @@ func writeContainerInfo(containerPid int, cmdArr []string, name, id, volumeMappi
 		CreateTime: createTime,
 		Status: container.STATUS_RUNNING,
 		VolumeMapping: volumeMapping,
-		PortMappings: nil,
+		PortMappings: portMappings,
 	}
 
 	jsonBytes, err := json.Marshal(containerInfo)

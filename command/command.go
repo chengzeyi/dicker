@@ -114,6 +114,7 @@ var runCmd = Command{
 		"tty":            runFlagSet.Bool("tty", false, "enable tty"),
 		"container-name": runFlagSet.String("container-name", "", "set container name"),
 		"volume-mapping": runFlagSet.String("volume-mapping", "", "':' delimited mapping to mount a host volume to a container volume"),
+		"port-mappings":  runFlagSet.String("port-mappings", "", "':' delimited mappings separated by ',' to forward a host port to a container port"),
 		"envs":           runFlagSet.String("environments", "", "':' delimited environment variables"),
 	},
 	action: func(argKV map[string]interface{}, tail []string) error {
@@ -130,10 +131,11 @@ var runCmd = Command{
 			Tty:           argKV["tty"].(bool),
 			ContainerName: argKV["container-name"].(string),
 			VolumeMapping: argKV["volume-mapping"].(string),
+			PortMappings:  strings.Split(argKV["port-mappings"].(string), ","),
 			Envs:          strings.Split(argKV["envs"].(string), ":"),
 		}
 		if err := Run(runOption, imageName, cmdArr); err != nil {
-			return fmt.Errorf("Run image %s and command array %v error %v", imageName, cmdArr, err)
+			return fmt.Errorf("Run() image %s and command array %v error %v", imageName, cmdArr, err)
 		}
 
 		return nil
@@ -151,7 +153,7 @@ var initCmd = Command{
 		}
 
 		if err := container.RunContainerInitProcess(); err != nil {
-			return fmt.Errorf("RunContainerInitProcess error %v", err)
+			return fmt.Errorf("RunContainerInitProcess() error %v", err)
 		}
 
 		return nil

@@ -55,7 +55,7 @@ func createReadOnlyLayer(imageName string) error {
 	if _, err := os.Stat(untarFoldPath); err != nil {
 		if os.IsNotExist(err) {
 			// The directory needs creating.
-			log.Infof("Directory %s needs creating", untarFoldPath)
+			// log.Infof("Directory %s needs creating", untarFoldPath)
 			if err := os.MkdirAll(untarFoldPath, 0622); err != nil {
 				return fmt.Errorf("MkdirAll() %s error %v", untarFoldPath, err)
 			}
@@ -64,7 +64,7 @@ func createReadOnlyLayer(imageName string) error {
 				return fmt.Errorf("Untar %s to directory %s error %v", imagePath, untarFoldPath, err)
 			}
 		} else {
-			return fmt.Errorf("Detect whether directory %s exists error %v", untarFoldPath, err)
+			return fmt.Errorf("Stat() %s exists error %v", untarFoldPath, err)
 		}
 	}
 

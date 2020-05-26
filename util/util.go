@@ -2,6 +2,7 @@ package util
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"math/rand"
@@ -27,15 +28,20 @@ func GenRandStrBytes(n int) string {
 	return string(bSlice)
 }
 
-func GetContainerPidByName(containerName string) (string, error) {
+func GetContainerPidByName(containerName string) (int, error) {
 	containerInfoPath := filepath.Join(container.DEFAULT_INFO_DIR_PATH, containerName)
 	configPath := filepath.Join(containerInfoPath, container.CONFIG_FILE_NAME)
-	_, err := ioutil.ReadFile(configPath)
+	contentBytes, err := ioutil.ReadFile(configPath)
 	if err != nil {
-		return "", err
+		return 0, err
 	}
-	// TODO: json.Unmarshal
-	return "", nil
+
+	var containerInfo container.ContainerInfo
+	if err := json.Unmarshal(contentBytes, &containerInfo); err != nil {
+		return 0, fmt.Errorf("Unmarshal() error %v", err)
+	}
+
+	return containerInfo.Pid, nil
 }
 
 // How to standardize this?
