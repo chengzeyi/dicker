@@ -7,11 +7,13 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"sync"
 
 	log "github.com/sirupsen/logrus"
 )
 
 type IpAddrManager struct {
+	mu sync.Mutex
 	// The path of the JSON format storage file of the allocation status of the subnets.
 	SubnetAllocatorPath string
 	// Subnet table, each value is bool slice whose elements are indicators of
@@ -24,6 +26,9 @@ func (ipam *IpAddrManager) Alloc(subnet *net.IPNet) (net.IP, error) {
 	if subnetNumber == nil {
 		return nil, fmt.Errorf("Unable to handle non-IPV4 subnet of %v", subnet)
 	}
+
+	ipam.mu.Lock()
+	defer ipam.mu.Unlock()
 
 	ipam.Subnets = map[string][]bool{}
 
@@ -68,6 +73,9 @@ func (ipam *IpAddrManager) Alloc(subnet *net.IPNet) (net.IP, error) {
 }
 
 func (ipam *IpAddrManager) Release(subnet *net.IPNet, ip net.IP) error {
+	ipam.mu.Lock()
+	defer ipam.mu.Unlock()
+
 	ipam.Subnets = map[string][]bool{}
 
 	if err := ipam.load(); err != nil {
