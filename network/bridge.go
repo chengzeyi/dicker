@@ -51,6 +51,7 @@ func (b *BridgeNetworkDriver) DeleteNetwork(nw *Network) error {
 	return nil
 }
 
+// Connect the endpoint to the network.
 func (b *BridgeNetworkDriver) ConnectToNetwork(nw *Network, endpoint *Endpoint) error {
 	ifaceName := nw.Name
 	iface, err := b.findInterface(ifaceName)
@@ -67,11 +68,20 @@ func (b *BridgeNetworkDriver) ConnectToNetwork(nw *Network, endpoint *Endpoint) 
 		PeerName: "cif-" + endpoint.Id,
 	}
 
-	panic("not implemented")
+	if err := netlink.LinkAdd(endpoint.Device); err != nil {
+		return fmt.Errorf("LinkAdd() veth with peer name %s error %v", endpoint.Device.PeerName, err)
+	}
+
+	if err := netlink.LinkSetUp(endpoint.Device); err != nil {
+		return fmt.Errorf("LinkSetUp() veth with peer name %s error %v", endpoint.Device.PeerName, err)
+	}
+
+	return nil
 }
 
+// Disconnect the endpoint from the network.
 func (b *BridgeNetworkDriver) DisconnectFromNetwork(nw *Network, endpoint *Endpoint) error {
-	panic("not implemented") // TODO: Implement
+	panic("not implemented")
 }
 
 func (b *BridgeNetworkDriver) initBridge(net *Network) error {
@@ -90,7 +100,7 @@ func (b *BridgeNetworkDriver) initBridge(net *Network) error {
 	}
 	
 	if err := b.setUpIpTables(bridgeName, net.IpNet); err != nil {
-		return fmt.Errorf("setUpInterface() of bridge interface %s and IP net error %v", bridgeName, net.IpNet, err)
+		return fmt.Errorf("setUpInterface() of bridge interface %s and IP net %v error %v", bridgeName, net.IpNet, err)
 	}
 	
 	return nil
@@ -158,11 +168,18 @@ func (b *BridgeNetworkDriver) setUpInterface(name string) error {
 func (b *BridgeNetworkDriver) setUpIpTables(name string, subnet *net.IPNet) error {
 	cmd := exec.Command(
 		"iptables",
+		// Operate on the nat table.
 		"-t", "nat",
+		// Append POSTROUTING rule to the end of the selected chain.
+		// POSTROUTING: for altering packets as they are about to go out.
 		"-A", "POSTROUTING",
+		// Specify the source to be in the network.
 		"-s", subnet.String(),
-		"!",
-		"-o", name,
+		// Do not match packets sent via this interface.
+		"!", "-o", name,
+		// Specify the target of the rule.
+		// MASQUERADE: This target is only valid in the nat table, in the POSTROUTING
+		// chain.
 		"-j", "MASQUERADE",
 	)
 	output, err := cmd.Output()
