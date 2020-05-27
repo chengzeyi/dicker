@@ -8,6 +8,7 @@ import (
 
 	"github.com/chengzeyi/dicker/container"
 	log "github.com/sirupsen/logrus"
+	"github.com/vishvananda/netlink"
 )
 
 const (
@@ -21,7 +22,7 @@ var (
 
 type Endpoint struct {
 	Id           string           `json:"id"`
-	// Device       netlink.Veth `json:"device"`
+	Device       *netlink.Veth    `json:"device"`
 	Ip           net.IP           `json:"ip"`
 	Mac          net.HardwareAddr `json:"mac"`
 	Network      *Network         `json:"network"`
@@ -39,7 +40,7 @@ type NetworkDriver interface {
 type Network struct {
 	Name   string     `json:"name"`
 	IpNet  *net.IPNet `json:"ip_net"`
-	// Driver string     `json:"driver"`
+	Driver string     `json:"driver"`
 }
 
 func NewNetWork(name string) *Network {

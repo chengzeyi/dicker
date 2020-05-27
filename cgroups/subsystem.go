@@ -54,7 +54,7 @@ func (s *SubsystemBase) set(path, key, val string) error {
 
 	cgroupPath, err := util.GetCgroupPath(s.Name(), path, true)
 	if err != nil {
-		return fmt.Errorf("GetCgroupPath() error %v", err)
+		return fmt.Errorf("GetCgroupPath() of subsystem %s error %v", s.Name(), err)
 	}
 
 	filePath := filepath.Join(cgroupPath, key)
@@ -68,7 +68,7 @@ func (s *SubsystemBase) set(path, key, val string) error {
 func (s *SubsystemBase) Apply(path string, pid int) error {
 	cgroupPath, err := util.GetCgroupPath(s.Name(), path, false)
 	if err != nil {
-		return fmt.Errorf("GetCgroupPath() error %v", err)
+		return fmt.Errorf("GetCgroupPath() of subsystem %s error %v", s.Name(), err)
 	}
 
 	tasksFilePath := filepath.Join(cgroupPath, "tasks")
@@ -82,7 +82,7 @@ func (s *SubsystemBase) Apply(path string, pid int) error {
 func (s *SubsystemBase) Remove(path string) error {
 	cgroupPath, err := util.GetCgroupPath(s.Name(), path, false)
 	if err != nil {
-		return fmt.Errorf("GetCgroupPath() error %v", err)
+		return fmt.Errorf("GetCgroupPath() of subsystem %s error %v", s.Name(), err)
 	}
 	if err := os.RemoveAll(cgroupPath); err != nil {
 		return fmt.Errorf("RemoveAll() %s error %v", cgroupPath, err)

@@ -30,8 +30,6 @@ func (ipam *IpAddrManager) Alloc(subnet *net.IPNet) (net.IP, error) {
 	ipam.mu.Lock()
 	defer ipam.mu.Unlock()
 
-	ipam.Subnets = map[string][]bool{}
-
 	if err := ipam.load(); err != nil {
 		log.Warnf("load() error %v", err)
 	}
@@ -76,8 +74,6 @@ func (ipam *IpAddrManager) Release(subnet *net.IPNet, ip net.IP) error {
 	ipam.mu.Lock()
 	defer ipam.mu.Unlock()
 
-	ipam.Subnets = map[string][]bool{}
-
 	if err := ipam.load(); err != nil {
 		return fmt.Errorf("load() error %v", err)
 	}
@@ -111,8 +107,9 @@ func (ipam *IpAddrManager) Release(subnet *net.IPNet, ip net.IP) error {
 	return nil
 }
 
-// Generally, load() needs an empty subnet table.
 func (ipam *IpAddrManager) load() error {
+	ipam.Subnets = map[string][]bool{}
+
 	if _, err := os.Stat(ipam.SubnetAllocatorPath); err != nil {
 		if os.IsNotExist(err) {
 			return fmt.Errorf("Path %s not exists", ipam.SubnetAllocatorPath)

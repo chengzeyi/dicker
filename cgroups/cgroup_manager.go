@@ -1,8 +1,6 @@
 package cgroups
 
 import (
-	"fmt"
-
 	log "github.com/sirupsen/logrus"
 )
 
