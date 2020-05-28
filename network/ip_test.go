@@ -19,7 +19,7 @@ func TestIpAddrManager_Alloc(t *testing.T) {
 		Subnets             map[string][]bool
 	}
 	type args struct {
-		subnet *net.IPNet
+		subnet string
 	}
 	tests := []struct {
 		name    string
@@ -34,7 +34,7 @@ func TestIpAddrManager_Alloc(t *testing.T) {
 				SubnetAllocatorPath: tmpAllocatorPath,
 			},
 			args: args{
-				subnet: getIpNetFromCIDR("192.168.1.0/24"),
+				subnet: "192.168.1.0/24",
 			},
 			want:    net.ParseIP("192.168.1.1"),
 			wantErr: false,
@@ -70,7 +70,7 @@ func TestIpAddrManager_Release(t *testing.T) {
 		Subnets             map[string][]bool
 	}
 	type args struct {
-		subnet *net.IPNet
+		subnet string
 		ip     net.IP
 	}
 	tests := []struct {
@@ -85,7 +85,7 @@ func TestIpAddrManager_Release(t *testing.T) {
 				SubnetAllocatorPath: tmpAllocatorPath,
 			},
 			args: args{
-				subnet: getIpNetFromCIDR("192.168.1.0/24"),
+				subnet: "192.168.1.0/24",
 			},
 			wantErr: false,
 		},
@@ -106,14 +106,4 @@ func TestIpAddrManager_Release(t *testing.T) {
 			}
 		})
 	}
-}
-
-func getIpFromCIDR(s string) net.IP {
-	ip, _, _ := net.ParseCIDR(s)
-	return ip
-}
-
-func getIpNetFromCIDR(s string) *net.IPNet {
-	_, ipNet, _ := net.ParseCIDR(s)
-	return ipNet
 }

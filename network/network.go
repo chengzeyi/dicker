@@ -1,10 +1,12 @@
 package network
 
 import (
+	"encoding/json"
 	"fmt"
 	"net"
 	"os"
 	"path/filepath"
+	"text/tabwriter"
 
 	"github.com/chengzeyi/dicker/container"
 	log "github.com/sirupsen/logrus"
@@ -16,9 +18,17 @@ const (
 )
 
 var (
-	drivers  = map[string]*NetworkDriver{}
+	drivers  = map[string]NetworkDriver{}
 	networks = map[string]*Network{}
 )
+
+func GetNetworkDriver(name string) NetworkDriver {
+	return drivers[name]
+}
+
+func GetNetwork(name string) *Network {
+	return networks[name]
+}
 
 type Endpoint struct {
 	Id           string           `json:"id"`
@@ -31,34 +41,83 @@ type Endpoint struct {
 
 type NetworkDriver interface {
 	Name() string
-	CreateNetwork(subnet, name string) (*Network, error)
+	CreateNetwork(nwName, subnet string, gatewayIp net.IP) (*Network, error)
 	DeleteNetwork(nw *Network) error
 	ConnectToNetwork(nw *Network, endpoint *Endpoint) error
 	DisconnectFromNetwork(nw *Network, endpoint *Endpoint) error
 }
 
 type Network struct {
-	Name   string     `json:"name"`
-	IpNet  *net.IPNet `json:"ip_net"`
-	Driver string     `json:"driver"`
-}
-
-func NewNetWork(name string) *Network {
-	return &Network{
-		Name: name,
-	}
+	Name      string `json:"name"`
+	Subnet    string `json:"subnet"`
+	GatewayIp net.IP `json:"gateway_ip"`
+	Driver    string `json:"driver"`
 }
 
 func (n *Network) Dump(path string) error {
-	panic("not implemented")
+	dirPath, _ := filepath.Split(path)
+	if _, err := os.Stat(dirPath); err != nil {
+		if os.IsNotExist(err) {
+			if err := os.MkdirAll(dirPath, 0644); err != nil {
+				return fmt.Errorf("MkdirAll() %s error %v", dirPath, err)
+			}
+		} else {
+			return fmt.Errorf("Stat() %s error %v", dirPath, err)
+		}
+	}
+
+	// O_TRUNC:: clear the file before writing.
+	nwFile, err := os.OpenFile(path, os.O_TRUNC|os.O_WRONLY|os.O_CREATE, 0644)
+	if err != nil {
+		return fmt.Errorf("OpenFile() %s error %v", path, err)
+	}
+	defer nwFile.Close()
+
+	nwJsonBytes, err := json.Marshal(n)
+	if err != nil {
+		return fmt.Errorf("Marshal() %v error %v", n, err)
+	}
+
+	if _, err := nwFile.Write(nwJsonBytes); err != nil {
+		return fmt.Errorf("Write() to %s error %v", path, err)
+	}
+
+	return nil
 }
 
 func (n *Network) Remove(path string) error {
-	panic("not implemented")
+	if _, err := os.Stat(path); err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		} else {
+			return fmt.Errorf("Stat() %s error %v", path, err)
+		}
+	}
+
+	if err := os.Remove(path); err != nil {
+		return fmt.Errorf("Remove() %s error %v", path, err)
+	}
+
+	return nil
 }
 
 func (n *Network) Load(path string) error {
-	panic("not implemented")
+	nwFile, err := os.Open(path)
+	if err != nil {
+		return fmt.Errorf("Open() %s error %v", path, err)
+	}
+
+	nwJsonBytes := make([]byte, 2048)
+	numBytes, err := nwFile.Read(nwJsonBytes)
+	if err != nil {
+		return fmt.Errorf("Read() from %s error %v", path, err)
+	}
+
+	if err := json.Unmarshal(nwJsonBytes[:numBytes], n); err != nil {
+		return fmt.Errorf("Unmarshal() error %v", err)
+	}
+
+	return nil
 }
 
 func Init() error {
@@ -79,31 +138,58 @@ func Init() error {
 			return nil
 		}
 
-		_, nwName := filepath.Split(nwPath)
-		nw := NewNetWork(nwName)
+		nw := &Network{}
 		if err := nw.Load(nwPath); err != nil {
 			log.Errorf("Load() %s error %v", nwPath, err)
 		}
-		log.Infof("Network %s loaded", nwName)
+		log.Infof("Network %s loaded", nw.Name)
 
-		networks[nwName] = nw
+		networks[nw.Name] = nw
 		return nil
 	})
 
 	return nil
 }
 
-// Create a new network with the driver and the CIDR format subnet.
-func CreateNetwork(driver, subnet, name string) error {
-	// _, ipNet, err := net.ParseCIDR(subnet)
-	// if err != nil {
-	// 	return fmt.Errorf("ParseCIDR() %s error %v", subnet, err)
-	// }
-	panic("not implemented")
+// Create a new network in the subnet with the driver.
+func CreateNetwork(driver, subnet, nwName string) error {
+	netDriver := GetNetworkDriver(driver)
+	if netDriver == nil {
+		return fmt.Errorf("Invalid network driver name %s", driver)
+	}
+
+	gatewayIp, err := ipAllocator.Alloc(subnet)
+	if err != nil {
+		return fmt.Errorf("Alloc() in net %s error %v", subnet, err)
+	}
+	
+	nw, err := netDriver.CreateNetwork(nwName, subnet, gatewayIp)
+	if err != nil {
+		return fmt.Errorf("CreateNetwork() %s with subnet %s and gateway IP %v error", nwName, subnet, gatewayIp)
+	}
+
+	nwPath := filepath.Join(DEFAULT_IP_ADDR_MANAGER_ALLOCATOR_PATH, nwName)
+	if err := nw.Dump(nwPath); err != nil {
+		return fmt.Errorf("Dump() %s error %v", nwPath, err)
+	}
+
+	networks[nwName] = nw
+
+	return nil
 }
 
 func ListNetwork() error {
-	panic("not implemented")
+	writer := tabwriter.NewWriter(os.Stdout, 12, 1, 3, ' ', 0)
+	fmt.Fprint(writer, "NAME\tSUBNET\tGATEWAY_IP\tDRIVER\n")
+	for _, nw := range networks {
+		fmt.Fprintf(writer, "%s\t%s\t%v\t%s\n", nw.Name, nw.Subnet, nw.GatewayIp, nw.Driver)
+	}
+
+	if err := writer.Flush(); err != nil {
+		return fmt.Errorf("Flush() error %v", err)
+	}
+
+	return nil
 }
 
 func DeleteNetwork(name string) error {

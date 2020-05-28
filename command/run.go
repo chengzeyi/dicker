@@ -102,7 +102,7 @@ func writeContainerInfo(containerPid int, cmdArr, portMappings []string, name, i
 
 	jsonBytes, err := json.Marshal(containerInfo)
 	if err != nil {
-		return fmt.Errorf("Marshal() container info error %v", err)
+		return fmt.Errorf("Marshal() %v error %v", containerInfo, err)
 	}
 
 	jsonStr := string(jsonBytes)

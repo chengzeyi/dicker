@@ -18,34 +18,46 @@ func (b *BridgeNetworkDriver) Name() string {
 	return "bridge"
 }
 
-func (b *BridgeNetworkDriver) CreateNetwork(subnet string, name string) (*Network, error) {
+func (b *BridgeNetworkDriver) CreateNetwork(nwName, subnet string, gatewayIp net.IP) (*Network, error) {
 	_, ipNet, err := net.ParseCIDR(subnet)
 	if err != nil {
 		return nil, fmt.Errorf("ParseCIDR() of %s error %v", subnet, err)
 	}
 
-	net := &Network{
-		Name:   name,
-		IpNet:  ipNet,
+	if err := b.createBridgeInterface(nwName); err != nil {
+		return nil, fmt.Errorf("createBridgeInterface() %s error %v", nwName, err)
+	}
+
+	if err := b.setInterfaceIp(nwName, &net.IPNet{IP: gatewayIp, Mask: ipNet.Mask}); err != nil {
+		return nil, fmt.Errorf("setInterfaceIp() of bridge interface %s, gatewayIp %v and subnet mask %v error %v", nwName, gatewayIp, ipNet.Mask, err)
+	}
+
+	if err := b.setUpInterface(nwName); err != nil {
+		return nil, fmt.Errorf("setUpInterface() of bridge interface %s error %v", nwName, err)
+	}
+
+	if err := b.setUpIpTables(nwName, ipNet); err != nil {
+		return nil, fmt.Errorf("setUpInterface() of bridge interface %s and subnet %v error %v", nwName, ipNet, err)
+	}
+
+	return &Network{
+		Name: nwName,
+		// The transformed notation can automatically suit the v4 or v6 format.
+		Subnet: ipNet.String(),
+		GatewayIp: gatewayIp,
 		Driver: b.Name(),
-	}
-
-	if err := b.initBridge(net); err != nil {
-		return nil, fmt.Errorf("initBridge() of subnet %s error %v", subnet, err)
-	}
-
-	return net, nil
+	}, nil
 }
 
 func (b *BridgeNetworkDriver) DeleteNetwork(nw *Network) error {
-	ifaceName  := nw.Name
-	iface, err := b.findInterface(ifaceName)
+	nwName := nw.Name
+	iface, err := b.findInterface(nwName)
 	if err != nil {
-		return fmt.Errorf("findInterface() interface %s error %v", ifaceName, err)
+		return fmt.Errorf("findInterface() interface %s error %v", nwName, err)
 	}
 
 	if err := netlink.LinkDel(iface); err != nil {
-		return fmt.Errorf("LinkDel() interface %s error %v", ifaceName, err)
+		return fmt.Errorf("LinkDel() interface %s error %v", nwName, err)
 	}
 
 	return nil
@@ -53,19 +65,19 @@ func (b *BridgeNetworkDriver) DeleteNetwork(nw *Network) error {
 
 // Connect the endpoint to the network.
 func (b *BridgeNetworkDriver) ConnectToNetwork(nw *Network, endpoint *Endpoint) error {
-	ifaceName := nw.Name
-	iface, err := b.findInterface(ifaceName)
+	nwName := nw.Name
+	iface, err := b.findInterface(nwName)
 	if err != nil {
-		return fmt.Errorf("findInterface() interface %s error %v", ifaceName, err)
+		return fmt.Errorf("findInterface() interface %s error %v", nwName, err)
 	}
-	
+
 	linkAttrs := netlink.NewLinkAttrs()
 	linkAttrs.Name = endpoint.Id
 	linkAttrs.MasterIndex = iface.Attrs().Index
 
 	endpoint.Device = &netlink.Veth{
 		LinkAttrs: linkAttrs,
-		PeerName: "cif-" + endpoint.Id,
+		PeerName:  "cif-" + endpoint.Id,
 	}
 
 	if err := netlink.LinkAdd(endpoint.Device); err != nil {
@@ -82,28 +94,6 @@ func (b *BridgeNetworkDriver) ConnectToNetwork(nw *Network, endpoint *Endpoint) 
 // Disconnect the endpoint from the network.
 func (b *BridgeNetworkDriver) DisconnectFromNetwork(nw *Network, endpoint *Endpoint) error {
 	panic("not implemented")
-}
-
-func (b *BridgeNetworkDriver) initBridge(net *Network) error {
-	bridgeName := net.Name
-
-	if err := b.createBridgeInterface(bridgeName); err != nil {
-		return fmt.Errorf("createBridgeInterface() %s error %v", bridgeName, err)
-	}
-
-	if err := b.setInterfaceIpNet(bridgeName, net.IpNet); err != nil {
-		return fmt.Errorf("setInterfaceIpNet() of bridge interface %s and IP net %v error %v", bridgeName, net.IpNet, err)
-	}
-
-	if err := b.setUpInterface(bridgeName); err != nil {
-		return fmt.Errorf("setUpInterface() of bridge interface %s error %v", bridgeName, err)
-	}
-	
-	if err := b.setUpIpTables(bridgeName, net.IpNet); err != nil {
-		return fmt.Errorf("setUpInterface() of bridge interface %s and IP net %v error %v", bridgeName, net.IpNet, err)
-	}
-	
-	return nil
 }
 
 // Create a new network bridge interface with bridgeName as its name.
@@ -133,16 +123,17 @@ func (b *BridgeNetworkDriver) createBridgeInterface(name string) error {
 	return nil
 }
 
-// Set the Ip net of the network interface.
-func (b *BridgeNetworkDriver) setInterfaceIpNet(name string, ipNet *net.IPNet) error {
+// Set the Ip of the network interface.
+// The IP contains the mask, so it is represented as net.IPNet.
+func (b *BridgeNetworkDriver) setInterfaceIp(name string, ip *net.IPNet) error {
 	iface, err := b.findInterface(name)
 	if err != nil {
 		return fmt.Errorf("findInterface() interface %s error %v", name, err)
 	}
 
 	addr := &netlink.Addr{
-		IPNet: ipNet,
-		Peer:  ipNet,
+		IPNet: ip,
+		Peer:  ip,
 	}
 
 	if err := netlink.AddrAdd(iface, addr); err != nil {
