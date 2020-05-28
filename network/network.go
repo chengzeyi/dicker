@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	DEFAULT_NETWORK_PATH = "/var/run/dicker/network"
+	DEFAULT_NETWORK_PATH = "/var/run/dicker/network/network"
 )
 
 var (

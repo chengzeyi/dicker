@@ -7,13 +7,15 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"sync"
 
 	log "github.com/sirupsen/logrus"
 )
 
+const (
+	DEFAULT_IP_ADDR_MANAGER_ALLOCATOR_PATH = "/var/run/dicker/network/ipam/subnet.json"
+)
+
 type IpAddrManager struct {
-	mu sync.Mutex
 	// The path of the JSON format storage file of the allocation status of the subnets.
 	SubnetAllocatorPath string
 	// Subnet table, each value is bool slice whose elements are indicators of
@@ -21,14 +23,15 @@ type IpAddrManager struct {
 	Subnets map[string][]bool
 }
 
+var ipAllocator = &IpAddrManager{
+	SubnetAllocatorPath: DEFAULT_IP_ADDR_MANAGER_ALLOCATOR_PATH,
+}
+
 func (ipam *IpAddrManager) Alloc(subnet *net.IPNet) (net.IP, error) {
 	subnetNumber := subnet.IP.To4()
 	if subnetNumber == nil {
 		return nil, fmt.Errorf("Unable to handle non-IPV4 subnet of %v", subnet)
 	}
-
-	ipam.mu.Lock()
-	defer ipam.mu.Unlock()
 
 	if err := ipam.load(); err != nil {
 		log.Warnf("load() error %v", err)
@@ -46,24 +49,28 @@ func (ipam *IpAddrManager) Alloc(subnet *net.IPNet) (net.IP, error) {
 		ipam.Subnets[subnet.String()] = make([]bool, 1<<uint(bits-ones))
 	}
 
-	defer func() {
-		go ipam.dump()
-	}()
-
 	for i, c := range ipam.Subnets[subnet.String()] {
 		// Skip allocated addresses and the first and last addresses,
 		// since they are used for representing the subnet and broadcasting.
 		if !c && i != 0 && i < len(ipam.Subnets[subnet.String()])-1 {
-			ipam.Subnets[subnet.String()][i] = true
-
 			// Perfectly clone a shallow copy of the original byte slice.
 			// https://github.com/go101/go101/wiki/How-to-perfectly-clone-a-slice
 			ip := append(subnetNumber[:0:0], subnetNumber...).Mask(subnet.Mask)
 			for j := 0; j < 4; j++ {
-				ip[j] += byte(i >> uint(3-j) * 8)
+				ip[j] += byte(i >> (uint(3-j) * 8))
 			}
 
-			return ip, nil
+			ip16 := ip.To16()
+			if ip16 == nil {
+				return nil, fmt.Errorf("Cannot convert IP %v to a 16-bit representation", ip)
+			}
+
+			ipam.Subnets[subnet.String()][i] = true
+			if err := ipam.dump(); err != nil {
+				return nil, fmt.Errorf("dump() error %v", err)
+			}
+
+			return ip16, nil
 		}
 	}
 
@@ -71,9 +78,6 @@ func (ipam *IpAddrManager) Alloc(subnet *net.IPNet) (net.IP, error) {
 }
 
 func (ipam *IpAddrManager) Release(subnet *net.IPNet, ip net.IP) error {
-	ipam.mu.Lock()
-	defer ipam.mu.Unlock()
-
 	if err := ipam.load(); err != nil {
 		return fmt.Errorf("load() error %v", err)
 	}
@@ -136,30 +140,32 @@ func (ipam *IpAddrManager) load() error {
 	return nil
 }
 
-func (ipam *IpAddrManager) dump() {
+func (ipam *IpAddrManager) dump() error {
 	configFileDir, _ := filepath.Split(ipam.SubnetAllocatorPath)
 	if _, err := os.Stat(configFileDir); err != nil {
 		if os.IsNotExist(err) {
 			if err := os.MkdirAll(configFileDir, 0644); err != nil {
-				log.Errorf("MkdirAll() %s error %v", configFileDir, err)
+				return fmt.Errorf("MkdirAll() %s error %v", configFileDir, err)
 			}
 		} else {
-			log.Errorf("Stat() %s error %v", configFileDir, err)
+			return fmt.Errorf("Stat() %s error %v", configFileDir, err)
 		}
 	}
 
 	configJsonBytes, err := json.Marshal(ipam.Subnets)
 	if err != nil {
-		log.Errorf("Marshal() error %v", err)
+		return fmt.Errorf("Marshal() error %v", err)
 	}
 
 	configFile, err := os.OpenFile(ipam.SubnetAllocatorPath, os.O_TRUNC|os.O_WRONLY|os.O_CREATE, 0644)
 	defer configFile.Close()
 	if err != nil {
-		log.Errorf("OpenFile() %s error %v", ipam.SubnetAllocatorPath, err)
+		return fmt.Errorf("OpenFile() %s error %v", ipam.SubnetAllocatorPath, err)
 	}
 
 	if _, err := configFile.Write(configJsonBytes); err != nil {
-		log.Errorf("Write() to file %s error %v", ipam.SubnetAllocatorPath, err)
+		return fmt.Errorf("Write() to file %s error %v", ipam.SubnetAllocatorPath, err)
 	}
+
+	return nil
 }
