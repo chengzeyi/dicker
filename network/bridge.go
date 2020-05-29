@@ -72,12 +72,13 @@ func (b *BridgeNetworkDriver) ConnectToNetwork(nw *Network, endpoint *Endpoint) 
 	}
 
 	linkAttrs := netlink.NewLinkAttrs()
-	linkAttrs.Name = endpoint.Id
+	// The name must be less than 16 characters.
+	linkAttrs.Name = endpoint.Id[:8]
 	linkAttrs.MasterIndex = iface.Attrs().Index
 
 	endpoint.Device = &netlink.Veth{
 		LinkAttrs: linkAttrs,
-		PeerName:  "cif-" + endpoint.Id,
+		PeerName:  "cif-" + endpoint.Id[:8],
 	}
 
 	if err := netlink.LinkAdd(endpoint.Device); err != nil {

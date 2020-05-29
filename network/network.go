@@ -22,26 +22,19 @@ var (
 	networks = map[string]*Network{}
 )
 
-func GetNetworkDriver(name string) NetworkDriver {
-	return drivers[name]
-}
-
-func GetNetwork(name string) *Network {
-	return networks[name]
-}
-
 type Endpoint struct {
 	Id           string           `json:"id"`
 	Device       *netlink.Veth    `json:"device"`
 	Ip           net.IP           `json:"ip"`
 	Mac          net.HardwareAddr `json:"mac"`
 	Network      *Network         `json:"network"`
-	PortMappints []string         `json:"port_mappings"`
+	PortMappings []string         `json:"port_mappings"`
 }
 
 type NetworkDriver interface {
 	Name() string
 	CreateNetwork(nwName, subnet string, gatewayIp net.IP) (*Network, error)
+	// Only use network name as the parameter should still work?
 	DeleteNetwork(nw *Network) error
 	ConnectToNetwork(nw *Network, endpoint *Endpoint) error
 	DisconnectFromNetwork(nw *Network, endpoint *Endpoint) error
@@ -153,9 +146,13 @@ func Init() error {
 
 // Create a new network in the subnet with the driver.
 func CreateNetwork(driver, subnet, nwName string) error {
-	netDriver := GetNetworkDriver(driver)
-	if netDriver == nil {
-		return fmt.Errorf("Invalid network driver name %s", driver)
+	nwDriver, ok := drivers[driver]
+	if !ok {
+		return fmt.Errorf("Driver %s not exists", driver)
+	}
+
+	if _, ok := networks[nwName]; ok {
+		return fmt.Errorf("Network %s already exists", nwName)
 	}
 
 	gatewayIp, err := ipAllocator.Alloc(subnet)
@@ -163,7 +160,7 @@ func CreateNetwork(driver, subnet, nwName string) error {
 		return fmt.Errorf("Alloc() in net %s error %v", subnet, err)
 	}
 	
-	nw, err := netDriver.CreateNetwork(nwName, subnet, gatewayIp)
+	nw, err := nwDriver.CreateNetwork(nwName, subnet, gatewayIp)
 	if err != nil {
 		return fmt.Errorf("CreateNetwork() %s with subnet %s and gateway IP %v error", nwName, subnet, gatewayIp)
 	}
@@ -174,6 +171,31 @@ func CreateNetwork(driver, subnet, nwName string) error {
 	}
 
 	networks[nwName] = nw
+
+	return nil
+}
+
+func DeleteNetwork(nwName string) error {
+	nw, ok := networks[nwName]
+	if !ok {
+		return fmt.Errorf("Network %s not exists", nwName)
+	}
+
+	nwDriver, ok := drivers[nw.Driver]
+	if !ok {
+		return fmt.Errorf("Driver %s not exists", nw.Driver)
+	}
+
+	if err := nwDriver.DeleteNetwork(nw); err != nil {
+		return fmt.Errorf("DeleteNetwork() %s error %v", nw.Name, err)
+	}
+
+	nwPath := filepath.Join(DEFAULT_IP_ADDR_MANAGER_ALLOCATOR_PATH, nw.Name)
+	if err := nw.Remove(nwPath); err != nil {
+		return fmt.Errorf("Remove() %s error %v", nwPath, err)
+	}
+
+	networks[nwName] = nil
 
 	return nil
 }
@@ -192,14 +214,39 @@ func ListNetwork() error {
 	return nil
 }
 
-func DeleteNetwork(name string) error {
-	panic("not implemented")
+func ConnectToNetwork(nwName string, containerInfo *container.ContainerInfo) error {
+	nw, ok := networks[nwName]
+	if !ok {
+		return fmt.Errorf("Network %s not exists", nwName)
+	}
+
+	nwDriver, ok := drivers[nw.Driver]
+	if !ok {
+		return fmt.Errorf("Driver %s not exists", nw.Driver)
+	}
+
+	ip, err := ipAllocator.Alloc(nw.Subnet)
+	if err != nil {
+		return fmt.Errorf("Alloc() in %s error %v", nw.Subnet, err)
+	}
+
+	endpoint := &Endpoint{
+		Id: fmt.Sprintf("%s-%s", containerInfo.Id, nwName),
+		Ip: ip,
+		Network: nw,
+		PortMappings: containerInfo.PortMappings,
+	}
+
+	if err := nwDriver.ConnectToNetwork(nw, endpoint); err != nil {
+		return fmt.Errorf("ConnectToNetwork() %s error %v", nw.Name, err)
+	}
+
+	// configEndpoint
+	// configPortMappings
+
+	return nil
 }
 
-func ConnectToNetwork(networkName string, containerInfo *container.ContainerInfo) error {
-	panic("not implemented")
-}
-
-func DisconnectFromNetwork(networkName string, containerInfo *container.ContainerInfo) error {
+func DisconnectFromNetwork(nwName string, containerInfo *container.ContainerInfo) error {
 	panic("not implemented")
 }
